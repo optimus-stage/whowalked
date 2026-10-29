@@ -93,8 +93,6 @@ input::placeholder { color: #5d6588; }
 #rows { display: flex; flex-direction: column; gap: 10px; }
 .row { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--edge); border-radius: 10px; background: #0d1124; }
 .row .r1 { display: flex; gap: 8px; align-items: center; }
-.row .r1 .f-name { flex: 1 1 auto; min-width: 0; }
-.row .f-close { flex: none; width: 108px; }
 .row .r2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) auto; gap: 8px; align-items: end; }
 .row .fld { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); min-width: 0; }
 .row .chk { display: flex; align-items: center; gap: 6px; font-size: 13px; height: 34px; white-space: nowrap; cursor: pointer; }
@@ -161,7 +159,6 @@ body { margin: 0; }
       <div class="warn" id="warn"></div>
       <button id="add" type="button">Add a person</button>
       <p class="note">Met at: your age when they came into your life. Use 0 for people who were there from the start.</p>
-      <p class="note">Closeness: very close lines run right beside yours. When a very close person drifts apart, their line crosses yours and leaves from the opposite side. Close and distant people leave from the side they came in.</p>
       <p class="note">Left your life? Type the age in the second box. Leave it empty if they are still here.</p>
       <p class="note">Tick "Passed away" if they died. Their line ends and their star rises into the sky. If you only drifted apart, leave it unticked. Their line slowly slides off the side of the screen.</p>
       <p class="note">Nothing you type leaves this page. Only anonymous play counts are recorded.</p>
@@ -182,9 +179,9 @@ body { margin: 0; }
   var PALETTE = ['#9b8cff', '#ff6a4d', '#4d8dff', '#cfe6ff', '#4de0a6', '#d49bff', '#f0f0f8', '#ff9ec4', '#7fe3ff', '#c6f06a'];
   var GOLD = '#ffb23e';
   var SAMPLE = [
-    ['Grandma', 0, 22, true, 2], ['Mom', 0, '', false, 1], ['Dad', 0, '', false, 1], ['Grandpa', 0, 18, true, 2],
-    ['Childhood friend', 6, '', false, 1], ['Grade school friend', 7, 15, false, 3],
-    ['First love', 16, 22, false, 1], ['High school friend', 16, '', false, 2]
+    ['Grandma', 0, 22, true], ['Mom', 0, '', false], ['Dad', 0, '', false], ['Grandpa', 0, 18, true],
+    ['Childhood friend', 6, '', false], ['Grade school friend', 7, 15, false],
+    ['First love', 16, 22, false], ['High school friend', 16, '', false]
   ];
   var FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", system-ui, sans-serif';
   var FONT_D = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", "Segoe UI", system-ui, sans-serif';
@@ -222,13 +219,12 @@ body { margin: 0; }
     el.querySelector('.gl').textContent = el.querySelector('.f-dead').checked ? 'Passed away at age' : 'Drifted apart at age';
   }
 
-  function addRow(name, arrive, left, passed, close, focus) {
+  function addRow(name, arrive, left, passed, focus) {
     var el = document.createElement('div');
     el.className = 'row';
     el.innerHTML =
       '<div class="r1">' +
       '<input type="text" class="f-name" maxlength="20" placeholder="Name" aria-label="Name">' +
-      '<select class="f-close" aria-label="How close they are to you"><option value="1">Very close</option><option value="2">Close</option><option value="3">Distant</option></select>' +
       '<button type="button" class="rm" aria-label="Remove person">&times;</button></div>' +
       '<div class="r2">' +
       '<label class="fld">Met at age<input type="number" class="f-arr" min="0" max="100" step="0.5" placeholder="Age"></label>' +
@@ -239,7 +235,6 @@ body { margin: 0; }
     el.querySelector('.f-arr').value = arrive;
     el.querySelector('.f-left').value = left;
     el.querySelector('.f-dead').checked = !!passed;
-    el.querySelector('.f-close').value = String(close || 2);
     setLabel(el);
     $('rows').appendChild(el);
     if (focus) el.querySelector('.f-name').focus();
@@ -247,7 +242,7 @@ body { margin: 0; }
 
   function buildModel() {
     var cur = Math.max(1, Math.min(100, parseFloat($('age').value) || 1));
-    var people = [], problems = 0;
+    var fam = [], others = [], problems = 0;
     Array.prototype.forEach.call(document.querySelectorAll('.row'), function (el, idx) {
       var name = el.querySelector('.f-name').value.trim() || 'Someone';
       var a = parseFloat(el.querySelector('.f-arr').value);
@@ -260,98 +255,40 @@ body { margin: 0; }
       if (ok && dead && l === null) ok = false;
       el.classList.toggle('bad', !ok);
       if (!ok) { problems++; return; }
-      var p = { name: name, arrive: a, left: l, dead: dead && l !== null, close: parseInt(el.querySelector('.f-close').value, 10) || 2, color: PALETTE[idx % PALETTE.length], phase: idx * 1.9 + 0.7 };
-      people.push(p);
+      var p = { name: name, arrive: a, left: l, dead: dead && l !== null, color: PALETTE[idx % PALETTE.length], phase: idx * 1.9 + 0.7 };
+      (a === 0 ? fam : others).push(p);
     });
     $('warn').textContent = problems
       ? 'Rows outlined in red are skipped. "Met at" must be below your age. The second age must come after it and not be past your age. "Passed away" needs an age.'
       : '';
-    people.forEach(function (p, k) { p.side = k % 2 === 0 ? -1 : 1; });
-    var me = { name: 'Me', arrive: 0, left: null, dead: false, color: GOLD, phase: 0.3, me: true, side: 0, off: 0, k: 0, close: 0 };
-    var order = people.concat([me]);
-    model = { cur: cur, order: order, N: order.length, layW: -1, cx: 0 };
+    var me = { name: 'Me', arrive: 0, left: null, color: GOLD, phase: 0.3, me: true };
+    fam.splice(Math.floor(fam.length / 2), 0, me);
+    others.sort(function (x, y) { return x.arrive - y.arrive; });
+    var order = fam;
+    others.forEach(function (p, k) { order = (k % 2 === 0) ? order.concat([p]) : [p].concat(order); });
+    order.forEach(function (p, i) { p.i = i; });
+    model = { cur: cur, order: order, N: order.length, meI: order.indexOf(me) };
   }
 
   /* ---------- Drawing ---------- */
   function Y(a) { return G.nowY + (state.age - a) * G.ppy; }
 
-  /* Closeness sets a lane: very close lines run right beside yours, close lines a little further, distant lines far out.
-     Two people only push each other apart when they are in your life at the same time and on the same side. */
-  function ensureLayout() {
-    if (model.layW === W) return;
-    model.layW = W;
-    var L = 58, Wd = Math.max(80, W - 58 - 18);
-    var half = Wd / 2 - 14;
-    model.cx = L + Wd / 2;
-    var gap = Math.max(26, Math.min(32, half / 6));
-    var d1 = Math.max(30, 0.1 * half);
-    var d2 = Math.max(d1 + 36, 0.3 * half);
-    var d3 = Math.max(d2 + 40, 0.6 * half);
-    var lane = { 1: d1, 2: d2, 3: d3 };
-    var placed = { '-1': [], '1': [] };
-
-    function span(p) { return [p.arrive, p.left === null ? Infinity : (p.dead ? p.left : p.left + 4)]; }
-    function fit(p, side) {
-      var sp = span(p), cand = lane[p.close], g = p.close === 1 ? 24 : gap;
-      var offs = placed[side].filter(function (q) {
-        var qs = span(q);
-        return qs[0] < sp[1] && sp[0] < qs[1];
-      }).map(function (q) { return q.off; });
-      var moved = true;
-      while (moved) {
-        moved = false;
-        for (var i = 0; i < offs.length; i++) {
-          if (Math.abs(cand - offs[i]) < g - 0.01) { cand = offs[i] + g; moved = true; }
-        }
-      }
-      return cand;
-    }
-
-    var people = model.order.filter(function (p) { return !p.me; });
-    people.sort(function (x, y) { return (x.close - y.close) || (x.arrive - y.arrive) || (x.phase - y.phase); });
-    var flip = false;
-    people.forEach(function (p) {
-      var a = fit(p, -1), b = fit(p, 1), side;
-      if (a < b) side = -1;
-      else if (b < a) side = 1;
-      else { side = flip ? 1 : -1; flip = !flip; }
-      p.side = side;
-      p.off = side < 0 ? a : b;
-      placed[side].push(p);
-    });
-    var maxOff = 0;
-    people.forEach(function (p) { if (p.off > maxOff) maxOff = p.off; });
-    if (maxOff > half) people.forEach(function (p) { p.off *= half / maxOff; });
-
-    /* stagger name labels of neighbours so they never sit on top of each other */
-    [-1, 1].forEach(function (side) {
-      var list = people.filter(function (p) { return p.side === side; }).sort(function (x, y) { return x.off - y.off; });
-      list.forEach(function (p, k) {
-        p.lv = (k > 0 && p.off - list[k - 1].off < 90) ? (list[k - 1].lv + 1) % 3 : 0;
-      });
-    });
-  }
-
-  /* very close people cross your line and leave from the opposite side; close and distant people leave the way they came in */
-  function exitSide(p) { return p.close === 1 ? -p.side : p.side; }
-
-  /* people who drifted apart slide off the left or right side; everyone else keeps their own distance from you */
+  /* people who drifted apart slide off the left or right side; everyone else follows their own column */
   function xAt(p, age) {
     if (p.left !== null && !p.dead && age > p.left) {
       var x0 = xBase(p, p.left);
-      var exitX = exitSide(p) < 0 ? -80 : W + 80;
+      var exitX = p.i < model.meI ? -80 : W + 80;
       return x0 + (exitX - x0) * (1 - Math.exp(-(age - p.left) / 1.6));
     }
     return xBase(p, age);
   }
 
   function xBase(p, age) {
-    ensureLayout();
-    var L = 58;
-    var base = model.cx + p.side * p.off;
+    var L = 58, Wd = Math.max(80, W - 58 - 18);
+    var base = L + Wd * (p.i + 1) / (model.N + 1);
     var x = base, since = age - p.arrive;
     if (p.arrive > 0) {
-      var startX = p.side < 0 ? L - 40 : W + 40;
+      var startX = p.i < (model.N - 1) / 2 ? L - 40 : W + 40;
       x = base + (startX - base) * Math.exp(-since / 1.3);
     }
     x += Math.sin(age * 1.25 + p.phase) * 4.5 * Math.min(1, since / 1.5);
@@ -473,15 +410,10 @@ body { margin: 0; }
       var x = xAt(p, age), y = G.nowY;
       var fade = 1;
       if (p.left !== null && !p.dead && age > p.left) {
-        fade = Math.max(0, Math.min(1, (exitSide(p) < 0 ? x - 52 : W - 12 - x) / 70));
+        fade = Math.max(0, Math.min(1, (p.i < model.meI ? x - 52 : W - 12 - x) / 70));
         if (fade <= 0.01) return;
       }
       ctx.globalAlpha = fade;
-      if (p.close === 1 && p.left !== null && !p.dead && age > p.left && Math.abs(x - model.cx) < 12) {
-        ctx.strokeStyle = rgba(GOLD, 0.6);
-        ctx.lineWidth = 1.2;
-        ctx.beginPath(); ctx.arc(x, y, 14, 0, 6.2832); ctx.stroke();
-      }
       var since = age - p.arrive;
       if (p.arrive > 0 && since < 1) {
         ctx.strokeStyle = rgba(p.color, (1 - since) * 0.7);
@@ -499,7 +431,7 @@ body { margin: 0; }
       ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
       ctx.fillStyle = p.color;
       var lx = Math.max(44, Math.min(W - 44, x));
-      var ly = y - (17 + (p.lv || 0) * 19);
+      var ly = y - ((crowded && p.i % 2) ? 36 : 17);
       ctx.fillText(p.name, lx, ly);
       ctx.globalAlpha = 1;
     });
@@ -845,11 +777,11 @@ body { margin: 0; }
   });
   $('add').addEventListener('click', function () {
     var cur = Math.max(2, parseFloat($('age').value) || 2);
-    addRow('', Math.round(cur / 2), '', false, 2, true);
+    addRow('', Math.round(cur / 2), '', false, true);
     onChange();
   });
 
-  SAMPLE.forEach(function (r) { addRow(r[0], r[1], r[2], r[3], r[4], false); });
+  SAMPLE.forEach(function (r) { addRow(r[0], r[1], r[2], r[3], false); });
   buildModel();
   state.age = model.cur;
   resize();
