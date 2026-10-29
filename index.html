@@ -772,7 +772,8 @@ body { margin: 0; }
   $('rows').addEventListener('click', function (e) {
     var b = e.target.closest && e.target.closest('.rm');
     if (!b) return;
-    b.parentNode.remove();
+    var row = b.closest('.row');
+    if (row) row.remove();
     onChange();
   });
   $('add').addEventListener('click', function () {
